@@ -16,11 +16,6 @@ async function bootstrap() {
       .tz('America/Sao_Paulo')
       .format('YYYY-MM-DD HH:mm:ss.SSS');
   };
-  Date.prototype.toJSON = function (): any {
-    return momentTimezone(this)
-      .tz('America/Sao_Paulo')
-      .format('YYYY-MM-DD HH:mm:ss.SSS');
-  };
 
   await app.listen(8080);
 }

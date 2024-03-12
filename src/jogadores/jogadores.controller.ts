@@ -9,6 +9,8 @@ import {
   Post,
   Put,
   Query,
+  UploadedFile,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -17,12 +19,17 @@ import { ValidacaoParametrosPipe } from 'src/common/pipes/validacao-parametros.p
 import { ClientProxySmartRanking } from 'src/proxyrmq/client-proxy';
 import { AtualizarJogadorDto } from './dtos/atualizar-jogador.dto';
 import { CriarJogadorDto } from './dtos/criar-jogador.dto';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { AwsService } from 'src/aws/aws.service';
 
 @Controller('api/v1/jogadores')
 export class JogadoresController {
   private logger = new Logger(JogadoresController.name);
 
-  constructor(private clientProxySmartRanking: ClientProxySmartRanking) {}
+  constructor(
+    private clientProxySmartRanking: ClientProxySmartRanking,
+    private awsService: AwsService,
+  ) {}
 
   private clientAdminBackend =
     this.clientProxySmartRanking.getClientProxyAdminBackendInstance();
@@ -54,6 +61,30 @@ export class JogadoresController {
         throw new BadRequestException(err);
       }
     }
+  }
+
+  @Post('/:_id/upload')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadArquivo(@UploadedFile() file: any, @Param('_id') _id: string) {
+    const jogador = await lastValueFrom(
+      this.clientAdminBackend.send('consultar-jogadores', _id),
+    );
+
+    if (!jogador) {
+      throw new BadRequestException('Jogador não encontrado');
+    }
+
+    const fotoJogador = await this.awsService.uploadArquivo(file, _id);
+
+    const atualizarJogadorDto: AtualizarJogadorDto = {};
+    atualizarJogadorDto.urlFotoJogador = fotoJogador.url;
+
+    this.clientAdminBackend.emit('atualizar-jogador', {
+      id: _id,
+      jogador: atualizarJogadorDto,
+    });
+
+    return this.clientAdminBackend.send('consultar-jogadores', _id);
   }
 
   @Get()
